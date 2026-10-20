@@ -1,476 +1,314 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  BarChart3,
-  BriefcaseBusiness,
-  Building2,
-  Download,
-  Filter,
-  LayoutDashboard,
-  LogOut,
-  Plus,
-  Search,
-  UserRoundCheck,
-  Users,
-} from 'lucide-react';
-import { formatDate, getDashboardDateRange, getLocationDistribution, getStatusColors, getStatusDistribution, getTrendData, getDefaultReportNarrative, yearLabel } from './utils';
-import { generateLeadReport } from './report';
-import { loadLeads, saveLeads } from './storage';
-import { Lead, MenuName } from '../types';
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+const { PrismaClient } = require('@prisma/client');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { Document, HeadingLevel, Packer, Paragraph, TextRun } = require('docx');
 
-const emptyForm = {
-  name: '',
-  company: '',
-  email: '',
-  location: '',
-  phone: '',
-  contactPerson: '',
-  status: 'New',
-  notes: '',
-};
+require('dotenv').config();
 
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'leads', label: 'Leads', icon: Users },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-];
+const prisma = new PrismaClient();
+const app = express();
+const PORT = Number(process.env.PORT || 4000);
+const JWT_SECRET = process.env.JWT_SECRET || 'exceed-secret-dev';
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@exceed.local').toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-const sortLeads = (items: Lead[]) => [...items].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '2mb' }));
 
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [menu, setMenu] = useState<MenuName>('dashboard');
-  const [leads, setLeads] = useState<Lead[]>(() => loadLeads());
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [dateStart, setDateStart] = useState('');
-  const [dateEnd, setDateEnd] = useState('');
-  const [reportTitle, setReportTitle] = useState(`Exceed Sales Report - ${yearLabel}`);
-  const [reportNarrative, setReportNarrative] = useState('');
+const issueToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+  expiresIn: '7d',
+});
 
-  useEffect(() => {
-    saveLeads(leads);
-  }, [leads]);
+function authRequired(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
-  const filteredLeads = useMemo(() => {
-    const rangeFiltered = getDashboardDateRange(leads, dateStart, dateEnd);
-    return sortLeads(
-      rangeFiltered.filter((lead) => {
-        const haystack = `${lead.name} ${lead.company} ${lead.status} ${lead.contactPerson} ${lead.location.join(' ')}`.toLowerCase();
-        return haystack.includes(search.toLowerCase());
-      })
-    );
-  }, [leads, search, dateStart, dateEnd]);
-
-  const totalLeads = filteredLeads.length;
-  const wonLeads = filteredLeads.filter((lead) => lead.status.toLowerCase().includes('won')).length;
-  const followUps = filteredLeads.filter((lead) => lead.status.toLowerCase().includes('follow')).length;
-  const avgPerRegion = filteredLeads.length ? Math.round(filteredLeads.reduce((sum, lead) => sum + lead.location.length, 0) / filteredLeads.length) : 0;
-
-  const statusData = useMemo(() => getStatusDistribution(filteredLeads), [filteredLeads]);
-  const locationData = useMemo(() => getLocationDistribution(filteredLeads), [filteredLeads]);
-  const trendData = useMemo(() => getTrendData(filteredLeads), [filteredLeads]);
-
-  const handleInputChange = (field: keyof typeof emptyForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-  };
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-
-    const nextLead: Lead = {
-      id: editingId ?? crypto.randomUUID(),
-      name: form.name.trim(),
-      company: form.company.trim(),
-      email: form.email.split(',').map((item) => item.trim()).filter(Boolean),
-      location: form.location.split(',').map((item) => item.trim()).filter(Boolean),
-      phone: form.phone.split(',').map((item) => item.trim()).filter(Boolean),
-      contactPerson: form.contactPerson.trim() || form.name.trim(),
-      status: form.status,
-      notes: form.notes.trim(),
-      createdAt: editingId ? leads.find((lead) => lead.id === editingId)?.createdAt ?? new Date().toISOString() : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (editingId) {
-      setLeads((current) => current.map((lead) => (lead.id === editingId ? nextLead : lead)));
-    } else {
-      setLeads((current) => [nextLead, ...current]);
-    }
-
-    resetForm();
-  };
-
-  const handleEdit = (lead: Lead) => {
-    setEditingId(lead.id);
-    setForm({
-      name: lead.name,
-      company: lead.company,
-      email: lead.email.join(', '),
-      location: lead.location.join(', '),
-      phone: lead.phone.join(', '),
-      contactPerson: lead.contactPerson,
-      status: lead.status,
-      notes: lead.notes,
-    });
-    setMenu('leads');
-  };
-
-  const handleDelete = (leadId: string) => {
-    setLeads((current) => current.filter((lead) => lead.id !== leadId));
-  };
-
-  const handleDownloadReport = async () => {
-    const data = filteredLeads.length ? filteredLeads : leads;
-    const narrative = reportNarrative || getDefaultReportNarrative(data);
-    const blob = await generateLeadReport(reportTitle || 'Exceed Lead Report', data, narrative);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${(reportTitle || 'lead-report').replace(/\s+/g, '-').toLowerCase()}.docx`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const renderDashboard = () => (
-    <div className="content-panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Overview</p>
-          <h1>Dashboard</h1>
-        </div>
-        <div className="date-filter">
-          <label>
-            <span>From</span>
-            <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
-          </label>
-          <label>
-            <span>To</span>
-            <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} />
-          </label>
-          {(dateStart || dateEnd) && (
-            <button className="secondary-button" onClick={() => { setDateStart(''); setDateEnd(''); }}>
-              Reset
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        <StatCard title="Total Leads" value={String(totalLeads)} icon={<Users size={18} />} accent="blue" />
-        <StatCard title="Qualified" value={String(wonLeads + followUps)} icon={<UserRoundCheck size={18} />} accent="green" />
-        <StatCard title="Won Deals" value={String(wonLeads)} icon={<BriefcaseBusiness size={18} />} accent="purple" />
-        <StatCard title="Avg Locations" value={String(avgPerRegion)} icon={<Building2 size={18} />} accent="orange" />
-      </div>
-
-      <div className="chart-grid">
-        <div className="chart-card large">
-          <div className="chart-title-row">
-            <h3>Lead trend</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trendData}>
-              <defs>
-                <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.7} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.04} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-              <XAxis dataKey="date" stroke="#cbd5e1" />
-              <YAxis stroke="#cbd5e1" />
-              <Tooltip />
-              <Area type="monotone" dataKey="total" stroke="#818cf8" fill="url(#trendFill)" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-title-row">
-            <h3>Status split</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={3}>
-                {statusData.map((entry) => (
-                  <Cell key={entry.name} fill={getStatusColors[entry.name] ?? '#64748b'} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="chart-card">
-        <div className="chart-title-row">
-          <h3>Location activity</h3>
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={locationData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-            <XAxis dataKey="name" stroke="#cbd5e1" />
-            <YAxis stroke="#cbd5e1" />
-            <Tooltip />
-            <Bar dataKey="value" fill="#22c55e" radius={[8, 8, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-
-  const renderLeads = () => (
-    <div className="content-panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Operations</p>
-          <h1>Leads</h1>
-        </div>
-        <div className="search-box">
-          <Search size={16} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leads" />
-        </div>
-      </div>
-
-      <div className="lead-layout">
-        <form className="lead-form" onSubmit={handleSubmit}>
-          <div className="section-title-row">
-            <h3>{editingId ? 'Edit lead' : 'Add lead'}</h3>
-          </div>
-
-          <div className="field-grid">
-            <label>
-              <span>Name</span>
-              <input value={form.name} onChange={(e) => handleInputChange('name', e.target.value)} required />
-            </label>
-            <label>
-              <span>Company</span>
-              <input value={form.company} onChange={(e) => handleInputChange('company', e.target.value)} required />
-            </label>
-            <label className="full-width">
-              <span>Email addresses</span>
-              <input value={form.email} onChange={(e) => handleInputChange('email', e.target.value)} placeholder="comma separated emails" />
-            </label>
-            <label className="full-width">
-              <span>Locations</span>
-              <input value={form.location} onChange={(e) => handleInputChange('location', e.target.value)} placeholder="comma separated locations" />
-            </label>
-            <label className="full-width">
-              <span>Phone numbers</span>
-              <input value={form.phone} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="comma separated phones" />
-            </label>
-            <label>
-              <span>Contact person</span>
-              <input value={form.contactPerson} onChange={(e) => handleInputChange('contactPerson', e.target.value)} />
-            </label>
-            <label>
-              <span>Status</span>
-              <select value={form.status} onChange={(e) => handleInputChange('status', e.target.value)}>
-                {['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'].map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            </label>
-            <label className="full-width">
-              <span>Status notes</span>
-              <textarea value={form.notes} onChange={(e) => handleInputChange('notes', e.target.value)} rows={4} placeholder="Write the lead status or summary here..." />
-            </label>
-          </div>
-
-          <div className="form-actions">
-            <button className="primary-button" type="submit">
-              <Plus size={16} />
-              {editingId ? 'Update lead' : 'Save lead'}
-            </button>
-            {editingId && (
-              <button className="secondary-button" type="button" onClick={resetForm}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-
-        <div className="lead-table-card">
-          <div className="section-title-row">
-            <h3>Lead list</h3>
-            <div className="chip">{filteredLeads.length} records</div>
-          </div>
-
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Company</th>
-                  <th>Status</th>
-                  <th>Location</th>
-                  <th>Updated</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeads.map((lead) => (
-                  <tr key={lead.id}>
-                    <td>
-                      <div className="person-cell">
-                        <div className="avatar">{lead.name.charAt(0).toUpperCase()}</div>
-                        <div>
-                          <strong>{lead.name}</strong>
-                          <div className="muted small">{lead.contactPerson}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{lead.company}</td>
-                    <td>
-                      <span className="status-pill" style={{ background: `${getStatusColors[lead.status] ?? '#64748b'}22`, color: getStatusColors[lead.status] ?? '#cbd5e1' }}>
-                        {lead.status}
-                      </span>
-                    </td>
-                    <td>{lead.location.join(', ') || '—'}</td>
-                    <td>{formatDate(lead.updatedAt)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="table-button" type="button" onClick={() => handleEdit(lead)}>Edit</button>
-                        <button className="table-button danger" type="button" onClick={() => handleDelete(lead.id)}>Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderReports = () => (
-    <div className="content-panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Intelligence</p>
-          <h1>Reports</h1>
-        </div>
-      </div>
-
-      <div className="report-box">
-        <div className="field-grid">
-          <label className="full-width">
-            <span>Report title</span>
-            <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} />
-          </label>
-          <label className="full-width">
-            <span>AI / business narrative</span>
-            <textarea rows={7} value={reportNarrative} onChange={(e) => setReportNarrative(e.target.value)} placeholder="Describe the sales performance or use the generated summary from Gemini later." />
-          </label>
-        </div>
-
-        <div className="report-summary-box">
-          <div className="mini-kpis">
-            <div>
-              <strong>{filteredLeads.length}</strong>
-              <span>Filtered leads</span>
-            </div>
-            <div>
-              <strong>{new Set(filteredLeads.flatMap((lead) => lead.location)).size}</strong>
-              <span>Locations</span>
-            </div>
-            <div>
-              <strong>{new Set(filteredLeads.map((lead) => lead.status)).size}</strong>
-              <span>Status groups</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="report-actions">
-          <button className="primary-button" type="button" onClick={handleDownloadReport}>
-            <Download size={16} />
-            Download .docx
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  if (!isLoggedIn) {
-    return (
-      <div className="auth-shell">
-        <div className="auth-card">
-          <div className="auth-brand">Exceed</div>
-          <h1>Access dashboard</h1>
-          <p>Sign in to manage leads, status tracking, charts, and report generation.</p>
-          <button className="primary-button" onClick={() => setIsLoggedIn(true)}>
-            Sign in
-          </button>
-        </div>
-      </div>
-    );
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication required.' });
   }
 
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <div className="brand-mark">E</div>
-          <div>
-            <strong>Exceed</strong>
-            <small>CRM Dashboard</small>
-          </div>
-        </div>
-
-        <nav className="nav-links">
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={`nav-button ${menu === id ? 'active' : ''}`} onClick={() => setMenu(id as MenuName)}>
-              <Icon size={18} />
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <button className="logout-button" onClick={() => setIsLoggedIn(false)}>
-            <LogOut size={16} />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      <main className="main-panel">
-        {menu === 'dashboard' && renderDashboard()}
-        {menu === 'leads' && renderLeads()}
-        {menu === 'reports' && renderReports()}
-      </main>
-    </div>
-  );
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid or expired token.' });
+  }
 }
 
-function StatCard({ title, value, icon, accent }: { title: string; value: string; icon: React.ReactNode; accent: string }) {
-  return (
-    <div className={`stat-card ${accent}`}>
-      <div className="stat-icon">{icon}</div>
-      <div>
-        <small>{title}</small>
-        <strong>{value}</strong>
-      </div>
-    </div>
-  );
+async function seedAdmin() {
+  const existing = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
+
+  if (existing) return;
+
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+
+  await prisma.user.create({
+    data: {
+      name: 'System Admin',
+      email: ADMIN_EMAIL,
+      passwordHash,
+      role: 'admin',
+    },
+  });
 }
+
+function normalizeLead(lead) {
+  return {
+    id: lead.id,
+    name: lead.name,
+    company: lead.company,
+    email: Array.isArray(lead.email) ? lead.email : [],
+    location: Array.isArray(lead.location) ? lead.location : [],
+    phone: Array.isArray(lead.phone) ? lead.phone : [],
+    contactPerson: lead.contactPerson,
+    status: lead.status,
+    notes: lead.notes || '',
+    createdAt: lead.createdAt,
+    updatedAt: lead.updatedAt,
+  };
+}
+
+function buildStatusSummary(leads) {
+  const map = {};
+  leads.forEach((lead) => {
+    map[lead.status] = (map[lead.status] || 0) + 1;
+  });
+  return Object.entries(map).map(([name, value]) => ({ name, value }));
+}
+
+function buildLocationSummary(leads) {
+  const map = {};
+  leads.forEach((lead) => {
+    (lead.location || []).forEach((location) => {
+      map[location] = (map[location] || 0) + 1;
+    });
+  });
+  return Object.entries(map).map(([name, value]) => ({ name, value }));
+}
+
+function buildTrendSummary(leads) {
+  const map = {};
+
+  leads.forEach((lead) => {
+    const date = new Date(lead.createdAt).toISOString().slice(0, 10);
+    map[date] = (map[date] || 0) + 1;
+  });
+
+  return Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, total]) => ({ date, total }));
+}
+
+async function generateGeminiNarrative(leads, title) {
+  const key = process.env.GEMINI_API_KEY;
+
+  if (!key) return '';
+
+  try {
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = `You are an internal business reporting assistant. Create a professional internal department report based on the following leads summary. Keep it concise, strategic, and practical. Include business insights, pipeline status interpretation, and next steps.\n\nTitle: ${title}\n\nLeads JSON:\n${JSON.stringify(leads, null, 2)}`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error('Gemini generation failed:', error.message);
+    return '';
+  }
+}
+
+async function createDocFile({ title, reportText, leads }) {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          text: title || 'Exceed Lead Report',
+          heading: HeadingLevel.TITLE,
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: 'Executive Summary', bold: true })],
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Paragraph({ text: reportText || 'Summary unavailable.' }),
+        new Paragraph({
+          children: [new TextRun({ text: 'Lead Details', bold: true })],
+          heading: HeadingLevel.HEADING_1,
+        }),
+        ...leads.flatMap((lead) => [
+          new Paragraph({
+            text: `${lead.name} — ${lead.company}`,
+            heading: HeadingLevel.HEADING_2,
+          }),
+          new Paragraph({ text: `Contact person: ${lead.contactPerson}` }),
+          new Paragraph({ text: `Email: ${(lead.email || []).join(', ') || 'No email provided'}` }),
+          new Paragraph({ text: `Phone: ${(lead.phone || []).join(', ') || 'No phone provided'}` }),
+          new Paragraph({ text: `Locations: ${(lead.location || []).join(', ') || 'No locations provided'}` }),
+          new Paragraph({ text: `Status: ${lead.status}` }),
+          new Paragraph({ text: `Notes: ${lead.notes || 'No notes provided'}` }),
+        ]),
+      ],
+    }],
+  });
+
+  return Packer.toBuffer(doc);
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, message: 'Exceed API is running.' });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required.' });
+  }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+
+  if (!valid) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  return res.json({
+    token: issueToken(user),
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+  });
+});
+
+app.get('/api/auth/me', authRequired, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) return res.status(404).json({ message: 'User not found.' });
+
+  return res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+  });
+});
+
+app.get('/api/leads', authRequired, async (req, res) => {
+  const leads = await prisma.lead.findMany({ orderBy: { updatedAt: 'desc' } });
+  return res.json(leads.map(normalizeLead));
+});
+
+app.post('/api/leads', authRequired, async (req, res) => {
+  const body = req.body || {};
+  const lead = await prisma.lead.create({
+    data: {
+      name: String(body.name || '').trim(),
+      company: String(body.company || '').trim(),
+      email: Array.isArray(body.email) ? body.email : String(body.email || '').split(',').map((i) => i.trim()).filter(Boolean),
+      location: Array.isArray(body.location) ? body.location : String(body.location || '').split(',').map((i) => i.trim()).filter(Boolean),
+      phone: Array.isArray(body.phone) ? body.phone : String(body.phone || '').split(',').map((i) => i.trim()).filter(Boolean),
+      contactPerson: String(body.contactPerson || body.name || '').trim(),
+      status: String(body.status || 'New').trim(),
+      notes: String(body.notes || '').trim(),
+    },
+  });
+
+  return res.status(201).json(normalizeLead(lead));
+});
+
+app.put('/api/leads/:id', authRequired, async (req, res) => {
+  const existing = await prisma.lead.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ message: 'Lead not found.' });
+
+  const body = req.body || {};
+  const updated = await prisma.lead.update({
+    where: { id: req.params.id },
+    data: {
+      name: String(body.name ?? existing.name).trim(),
+      company: String(body.company ?? existing.company).trim(),
+      email: Array.isArray(body.email) ? body.email : String(body.email ?? existing.email.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
+      location: Array.isArray(body.location) ? body.location : String(body.location ?? existing.location.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
+      phone: Array.isArray(body.phone) ? body.phone : String(body.phone ?? existing.phone.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
+      contactPerson: String(body.contactPerson ?? existing.contactPerson).trim(),
+      status: String(body.status ?? existing.status).trim(),
+      notes: String(body.notes ?? existing.notes ?? '').trim(),
+    },
+  });
+
+  return res.json(normalizeLead(updated));
+});
+
+app.delete('/api/leads/:id', authRequired, async (req, res) => {
+  await prisma.lead.delete({ where: { id: req.params.id } }).catch(() => null);
+  return res.json({ ok: true });
+});
+
+app.get('/api/dashboard/summary', authRequired, async (req, res) => {
+  const leads = (await prisma.lead.findMany({ orderBy: { createdAt: 'asc' } })).map(normalizeLead);
+
+  const total = leads.length;
+  const statusBreakdown = buildStatusSummary(leads);
+  const locationBreakdown = buildLocationSummary(leads);
+  const trend = buildTrendSummary(leads);
+  const active = leads.filter((lead) => ['Interested', 'Follow Up', 'Qualified', 'Closed Won', 'Proposal Sent', 'Negotiation'].includes(lead.status)).length;
+
+  return res.json({
+    total,
+    active,
+    won: leads.filter((lead) => /won/i.test(lead.status)).length,
+    statusBreakdown,
+    locationBreakdown,
+    trend,
+  });
+});
+
+app.post('/api/reports/generate-docx', authRequired, async (req, res) => {
+  const { title = 'Exceed Lead Report', leads = [], narrative = '' } = req.body || {};
+  const data = Array.isArray(leads) && leads.length ? leads : await prisma.lead.findMany({ orderBy: { updatedAt: 'desc' } });
+  const normalizedLeads = data.map(normalizeLead);
+  const generated = narrative || (await generateGeminiNarrative(normalizedLeads, title));
+  const buffer = await createDocFile({ title, reportText: generated || 'The team is tracking a stable pipeline with active opportunities at varying stages of development.', leads: normalizedLeads });
+
+  res.setHeader('Content-Disposition', `attachment; filename="${(title || 'exceed-report').replace(/\s+/g, '-').toLowerCase()}.docx"`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  return res.send(buffer);
+});
+
+const distFolder = path.join(__dirname, 'dist');
+const distIndex = path.join(distFolder, 'index.html');
+
+if (fs.existsSync(distIndex)) {
+  app.use(express.static(distFolder));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(distIndex);
+  });
+}
+
+async function start() {
+  await seedAdmin();
+  app.listen(PORT, () => {
+    console.log(`Exceed backend running on http://localhost:${PORT}`);
+  });
+}
+
+start().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});

@@ -1,48 +1,41 @@
-# Exceed Leads Dashboard
+# Exceed
 
-A modern lead dashboard and reporting app built in React + TypeScript, designed to match the style of the FutureTech admin dashboard while adding lead management, status-driven analytics, and Word report downloads.
+A lightweight internal dashboard for lead tracking, analytics, and status-based reporting.
 
 ## Features
 
-- Dashboard with KPI cards, trend charts, status chart, and date filtering
-- Leads management with add, edit, delete, and search
-- Multiple emails, locations, and phone numbers per lead
-- Status text and analytics connected to summaries and charts
-- DOCX report export for lead review
-- Logout flow for session completion
-- Prisma schema ready for PostgreSQL and Render deployment
+- Secure login flow with JWT auth
+- Dashboard with KPI cards, filters, trend charts, and location chart
+- Leads management with multiple emails, locations, and phone numbers
+- Status-based reporting and dashboard summarization
+- AI-powered report generation through Gemini
+- DOCX download export for management reporting
+- Prisma + PostgreSQL schema for production persistence
+- Render deployment config
+
+## Default login
+
+- Email: admin@exceed.local
+- Password: admin123
+
+Update these values in your Render environment variables or `.env` file before production use.
 
 ## Local development
 
-1. Install dependencies:
+1. Install dependencies
    npm install
-2. Start the app:
-   npm run dev
-3. Build for production:
-   npm run build
-
-## PostgreSQL / Prisma setup
-
-1. Copy `.env.example` to `.env`
-2. Set a working `DATABASE_URL`
-3. Run:
-   npx prisma generate
+2. Create your `.env` file based on `.env.example`
+3. Push Prisma schema
    npx prisma db push
+4. Start the application
+   npm run dev
 
-## Render deployment
+The frontend runs on port 3000 and the backend runs on port 4000.
 
-Use Render's "Web Service" with the following configuration:
+## Production / Render
 
-- Build command: `npm install && npm run build`
-- Start command: `npm run dev -- --host 0.0.0.0 --port 10000`
-- Environment variables:
-  - `NODE_ENV=production`
-  - `DATABASE_URL=postgresql://...`
+1. Add your PostgreSQL connection string in `DATABASE_URL`
+2. Add a valid `GEMINI_API_KEY` for AI report generation
+3. Deploy with the included `render.yaml`
 
-For a production deployment, it is recommended to add a small API server or switch the app to a Node backend for Prisma access, while keeping the Vite frontend as a static build.
-
-## Notes
-
-- This version stores data in the browser localStorage by default.
-- The Prisma schema is included for database-ready integration when you are ready to move to PostgreSQL in Render.
-- The DOCX export uses the `docx` library and can be extended with Gemini-generated business narrative once an API key is supplied.
+The app will serve the built React frontend and API routes from the same Node service.
