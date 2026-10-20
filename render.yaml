@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: exceed-leads-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run dev -- --host 0.0.0.0 --port 10000
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
