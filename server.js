@@ -9,6 +9,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 dotenv.config();
 
@@ -311,6 +312,10 @@ if (fs.existsSync(distIndex)) {
 }
 
 async function start() {
+  console.log('Running prisma db push to ensure tables exist...');
+  execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
+  console.log('Database schema synced.');
+
   await seedAdmin();
   app.listen(PORT, () => {
     console.log(`Exceed backend running on http://localhost:${PORT}`);
