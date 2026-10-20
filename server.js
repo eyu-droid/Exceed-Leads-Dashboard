@@ -48,12 +48,20 @@ function authRequired(req, res, next) {
 }
 
 async function seedAdmin() {
+  console.log(`Seeding admin check for email: "${ADMIN_EMAIL}"`);
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
   const existing = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
 
-  if (existing) return;
+  if (existing) {
+    console.log('Admin user exists, updating password to match env.');
+    await prisma.user.update({
+      where: { email: ADMIN_EMAIL },
+      data: { passwordHash },
+    });
+    return;
+  }
 
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-
+  console.log('Creating admin user...');
   await prisma.user.create({
     data: {
       name: 'System Admin',
@@ -62,6 +70,7 @@ async function seedAdmin() {
       role: 'admin',
     },
   });
+  console.log('Admin user created successfully.');
 }
 
 function normalizeLead(lead) {
