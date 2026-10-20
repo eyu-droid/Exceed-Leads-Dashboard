@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
   BriefcaseBusiness,
   Building2,
   Download,
@@ -15,6 +11,10 @@ import {
   Users,
 } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Pie,
