@@ -1,4 +1,4 @@
-# Exceed
+# Exceed Sales and Marketing Dashboard
 
 A lightweight internal dashboard for lead tracking, analytics, and status-based reporting.
 
