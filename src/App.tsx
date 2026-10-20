@@ -3,12 +3,14 @@ import {
   BriefcaseBusiness,
   Building2,
   Download,
+  Eye,
   LayoutDashboard,
   LogOut,
   Plus,
   Search,
   UserRoundCheck,
   Users,
+  X,
 } from 'lucide-react';
 import {
   Area,
@@ -59,7 +61,6 @@ type DashboardSummary = {
 };
 
 const defaultForm = {
-  name: '',
   company: '',
   email: '',
   location: '',
@@ -110,6 +111,8 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [search, setSearch] = useState('');
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
@@ -227,10 +230,11 @@ export default function App() {
 
     const payload = {
       ...form,
+      name: form.company,
       email: form.email.split(',').map((item) => item.trim()).filter(Boolean),
       location: form.location.split(',').map((item) => item.trim()).filter(Boolean),
       phone: form.phone.split(',').map((item) => item.trim()).filter(Boolean),
-      contactPerson: form.contactPerson || form.name,
+      contactPerson: form.contactPerson || form.company,
     };
 
     try {
@@ -242,6 +246,7 @@ export default function App() {
 
       if (!response.ok) throw new Error('Save failed');
       resetForm();
+      setShowForm(false);
       await fetchDashboard();
     } catch (error) {
       console.error(error);
@@ -251,7 +256,6 @@ export default function App() {
   const handleEdit = (lead: Lead) => {
     setEditingId(lead.id);
     setForm({
-      name: lead.name,
       company: lead.company,
       email: lead.email.join(', '),
       location: lead.location.join(', '),
@@ -260,6 +264,7 @@ export default function App() {
       status: lead.status,
       notes: lead.notes,
     });
+    setShowForm(true);
     setMenu('leads');
   };
 
@@ -268,6 +273,16 @@ export default function App() {
     await fetch(`/api/leads/${leadId}`, {
       method: 'DELETE',
       headers: authHeaders(token),
+    });
+    await fetchDashboard();
+  };
+
+  const handleReject = async (lead: Lead) => {
+    if (!token) return;
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ ...lead, status: 'Closed Lost' }),
     });
     await fetchDashboard();
   };
@@ -471,129 +486,189 @@ export default function App() {
                 <h1>Leads</h1>
               </div>
 
-              <div className="search-box">
-                <Search size={16} />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lead" />
+              <div className="header-actions">
+                <div className="search-box">
+                  <Search size={16} />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lead" />
+                </div>
+                <button type="button" className="primary-button" onClick={() => { resetForm(); setShowForm(true); }}>
+                  <Plus size={16} />
+                  Add New
+                </button>
               </div>
             </div>
 
-            <div className="lead-layout">
-              <form className="form-card" onSubmit={handleSubmitLead}>
-                <div className="card-title">
-                  <h3>{editingId ? 'Edit lead' : 'Add lead'}</h3>
-                </div>
+            <div className="table-card">
+              <div className="card-title">
+                <h3>Lead list</h3>
+                <span className="mini-pill">{filteredLeads.length} records</span>
+              </div>
 
-                <div className="field-grid">
-                  <label>
-                    <span>Name</span>
-                    <input value={form.name} onChange={(e) => handleField('name', e.target.value)} required />
-                  </label>
-
-                  <label>
-                    <span>Company</span>
-                    <input value={form.company} onChange={(e) => handleField('company', e.target.value)} required />
-                  </label>
-
-                  <label className="full-span">
-                    <span>Email addresses</span>
-                    <input value={form.email} onChange={(e) => handleField('email', e.target.value)} placeholder="Comma separated" />
-                  </label>
-
-                  <label className="full-span">
-                    <span>Locations</span>
-                    <input value={form.location} onChange={(e) => handleField('location', e.target.value)} placeholder="Comma separated" />
-                  </label>
-
-                  <label className="full-span">
-                    <span>Phone numbers</span>
-                    <input value={form.phone} onChange={(e) => handleField('phone', e.target.value)} placeholder="Comma separated" />
-                  </label>
-
-                  <label>
-                    <span>Contact person</span>
-                    <input value={form.contactPerson} onChange={(e) => handleField('contactPerson', e.target.value)} />
-                  </label>
-
-                  <label>
-                    <span>Status</span>
-                    <select value={form.status} onChange={(e) => handleField('status', e.target.value)}>
-                      {['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'].map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="full-span">
-                    <span>Status notes</span>
-                    <textarea rows={5} value={form.notes} onChange={(e) => handleField('notes', e.target.value)} />
-                  </label>
-                </div>
-
-                <div className="form-actions">
-                  <button type="submit" className="primary-button">
-                    <Plus size={16} />
-                    {editingId ? 'Update lead' : 'Save lead'}
-                  </button>
-
-                  {editingId && (
-                    <button type="button" className="secondary-button" onClick={resetForm}>
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </form>
-
-              <div className="table-card">
-                <div className="card-title">
-                  <h3>Lead list</h3>
-                  <span className="mini-pill">{filteredLeads.length} records</span>
-                </div>
-
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Company</th>
-                        <th>Status</th>
-                        <th>Location</th>
-                        <th>Updated</th>
-                        <th>Actions</th>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Company Name</th>
+                      <th>Contact Person</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Locations</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.map((lead) => (
+                      <tr key={lead.id} className={lead.status === 'Closed Lost' ? 'rejected-row' : ''}>
+                        <td>
+                          <div className="person-cell">
+                            <div className="avatar-dot">{lead.company.charAt(0).toUpperCase()}</div>
+                            <strong>{lead.company}</strong>
+                          </div>
+                        </td>
+                        <td>{lead.contactPerson || '—'}</td>
+                        <td>{lead.email.join(', ') || '—'}</td>
+                        <td>{lead.phone.join(', ') || '—'}</td>
+                        <td>{lead.location.join(', ') || '—'}</td>
+                        <td>
+                          <div className="inline-actions">
+                            <button type="button" className="table-button view" onClick={() => setViewingLead(lead)}>
+                              <Eye size={14} />
+                              View
+                            </button>
+                            <button type="button" className="table-button" onClick={() => handleEdit(lead)}>Edit</button>
+                            {lead.status !== 'Closed Lost' && (
+                              <button type="button" className="table-button danger" onClick={() => handleReject(lead)}>Reject</button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLeads.map((lead) => (
-                        <tr key={lead.id}>
-                          <td>
-                            <div className="person-cell">
-                              <div className="avatar-dot">{lead.name.charAt(0).toUpperCase()}</div>
-                              <div>
-                                <strong>{lead.name}</strong>
-                                <small>{lead.contactPerson}</small>
-                              </div>
-                            </div>
-                          </td>
-                          <td>{lead.company}</td>
-                          <td>
-                            <span className="status-pill" style={{ background: `${getStatusColors[lead.status] || '#64748b'}22`, color: getStatusColors[lead.status] || '#f8fafc' }}>
-                              {lead.status}
-                            </span>
-                          </td>
-                          <td>{lead.location.join(', ') || '—'}</td>
-                          <td>{formatDate(lead.updatedAt)}</td>
-                          <td>
-                            <div className="inline-actions">
-                              <button type="button" className="table-button" onClick={() => handleEdit(lead)}>Edit</button>
-                              <button type="button" className="table-button danger" onClick={() => handleDelete(lead.id)}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+
+            {/* Add / Edit Modal */}
+            {showForm && (
+              <div className="modal-overlay" onClick={() => { setShowForm(false); resetForm(); }}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3>{editingId ? 'Edit lead' : 'Add new lead'}</h3>
+                    <button type="button" className="modal-close" onClick={() => { setShowForm(false); resetForm(); }}>
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSubmitLead}>
+                    <div className="field-grid">
+                      <label className="full-span">
+                        <span>Company name</span>
+                        <input value={form.company} onChange={(e) => handleField('company', e.target.value)} required />
+                      </label>
+
+                      <label className="full-span">
+                        <span>Email addresses</span>
+                        <input value={form.email} onChange={(e) => handleField('email', e.target.value)} placeholder="Comma separated" />
+                      </label>
+
+                      <label className="full-span">
+                        <span>Phone numbers</span>
+                        <input value={form.phone} onChange={(e) => handleField('phone', e.target.value)} placeholder="Comma separated" />
+                      </label>
+
+                      <label>
+                        <span>Contact person <small>(optional)</small></span>
+                        <input value={form.contactPerson} onChange={(e) => handleField('contactPerson', e.target.value)} />
+                      </label>
+
+                      <label>
+                        <span>Status</span>
+                        <select value={form.status} onChange={(e) => handleField('status', e.target.value)}>
+                          {['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'].map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="full-span">
+                        <span>Locations <small>(optional)</small></span>
+                        <input value={form.location} onChange={(e) => handleField('location', e.target.value)} placeholder="Comma separated" />
+                      </label>
+
+                      <label className="full-span">
+                        <span>Status notes</span>
+                        <textarea rows={4} value={form.notes} onChange={(e) => handleField('notes', e.target.value)} />
+                      </label>
+                    </div>
+
+                    <div className="form-actions">
+                      <button type="submit" className="primary-button">
+                        <Plus size={16} />
+                        {editingId ? 'Update lead' : 'Save lead'}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => { setShowForm(false); resetForm(); }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* View Lead Modal */}
+            {viewingLead && (
+              <div className="modal-overlay" onClick={() => setViewingLead(null)}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3>Lead details</h3>
+                    <button type="button" className="modal-close" onClick={() => setViewingLead(null)}>
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <small>Company</small>
+                      <strong>{viewingLead.company}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Contact Person</small>
+                      <strong>{viewingLead.contactPerson || '—'}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Email</small>
+                      <strong>{viewingLead.email.join(', ') || '—'}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Phone</small>
+                      <strong>{viewingLead.phone.join(', ') || '—'}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Locations</small>
+                      <strong>{viewingLead.location.join(', ') || '—'}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Status</small>
+                      <span className="status-pill" style={{ background: `${getStatusColors[viewingLead.status] || '#64748b'}22`, color: getStatusColors[viewingLead.status] || '#f8fafc' }}>
+                        {viewingLead.status}
+                      </span>
+                    </div>
+                    <div className="detail-item full-span">
+                      <small>Notes</small>
+                      <p>{viewingLead.notes || 'No notes.'}</p>
+                    </div>
+                    <div className="detail-item">
+                      <small>Created</small>
+                      <strong>{formatDate(viewingLead.createdAt)}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <small>Updated</small>
+                      <strong>{formatDate(viewingLead.updatedAt)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
