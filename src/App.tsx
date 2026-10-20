@@ -8,6 +8,7 @@ import {
   LogOut,
   Plus,
   Search,
+  Trash2,
   UserRoundCheck,
   Users,
   X,
@@ -70,6 +71,8 @@ const defaultForm = {
   notes: '',
 };
 
+const STATUS_OPTIONS = ['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'] as const;
+
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'leads', label: 'Leads', icon: Users },
@@ -113,7 +116,14 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
+  const [formError, setFormError] = useState('');
   const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCompany, setFilterCompany] = useState('');
+  const [filterContact, setFilterContact] = useState('');
+  const [filterEmail, setFilterEmail] = useState('');
+  const [filterPhone, setFilterPhone] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
   const [reportTitle, setReportTitle] = useState('Exceed Internal Lead Report');
@@ -174,14 +184,25 @@ export default function App() {
         if (from && createdAt < from) return false;
         if (to && createdAt > to) return false;
 
+        // Global search
         const q = search.toLowerCase();
-        if (!q) return true;
+        if (q) {
+          const haystack = `${lead.name} ${lead.company} ${lead.status} ${lead.contactPerson} ${lead.location.join(' ')} ${lead.email.join(' ')} ${lead.phone.join(' ')}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
 
-        const haystack = `${lead.name} ${lead.company} ${lead.status} ${lead.contactPerson} ${lead.location.join(' ')}`.toLowerCase();
-        return haystack.includes(q);
+        // Column filters
+        if (filterStatus && lead.status !== filterStatus) return false;
+        if (filterCompany && !lead.company.toLowerCase().includes(filterCompany.toLowerCase())) return false;
+        if (filterContact && !lead.contactPerson.toLowerCase().includes(filterContact.toLowerCase())) return false;
+        if (filterEmail && !lead.email.join(', ').toLowerCase().includes(filterEmail.toLowerCase())) return false;
+        if (filterPhone && !lead.phone.join(', ').toLowerCase().includes(filterPhone.toLowerCase())) return false;
+        if (filterLocation && !lead.location.join(', ').toLowerCase().includes(filterLocation.toLowerCase())) return false;
+
+        return true;
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  }, [leads, search, dateStart, dateEnd]);
+  }, [leads, search, dateStart, dateEnd, filterStatus, filterCompany, filterContact, filterEmail, filterPhone, filterLocation]);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -227,11 +248,28 @@ export default function App() {
   const handleSubmitLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
+    setFormError('');
+
+    // Duplication control: check if a lead with the same company name already exists
+    const companyNorm = form.company.trim().toLowerCase();
+    const emailList = form.email.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
+
+    const duplicate = leads.find((lead) => {
+      if (editingId && lead.id === editingId) return false; // skip self when editing
+      if (lead.company.trim().toLowerCase() === companyNorm) return true;
+      if (emailList.length > 0 && lead.email.some((e) => emailList.includes(e.toLowerCase()))) return true;
+      return false;
+    });
+
+    if (duplicate) {
+      setFormError(`Duplicate detected: a lead with company "${duplicate.company}" or matching email already exists.`);
+      return;
+    }
 
     const payload = {
       ...form,
       name: form.company,
-      email: form.email.split(',').map((item) => item.trim()).filter(Boolean),
+      email: emailList,
       location: form.location.split(',').map((item) => item.trim()).filter(Boolean),
       phone: form.phone.split(',').map((item) => item.trim()).filter(Boolean),
       contactPerson: form.contactPerson || form.company,
@@ -286,6 +324,28 @@ export default function App() {
     });
     await fetchDashboard();
   };
+
+  const handleStatusChange = async (lead: Lead, newStatus: string) => {
+    if (!token || lead.status === newStatus) return;
+    await fetch(`/api/leads/${lead.id}`, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ ...lead, status: newStatus }),
+    });
+    await fetchDashboard();
+  };
+
+  const clearAllFilters = () => {
+    setFilterStatus('');
+    setFilterCompany('');
+    setFilterContact('');
+    setFilterEmail('');
+    setFilterPhone('');
+    setFilterLocation('');
+    setSearch('');
+  };
+
+  const hasActiveFilters = filterStatus || filterCompany || filterContact || filterEmail || filterPhone || filterLocation;
 
   const handleDownloadReport = async () => {
     if (!token) return;
@@ -489,9 +549,14 @@ export default function App() {
               <div className="header-actions">
                 <div className="search-box">
                   <Search size={16} />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lead" />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search all columns..." />
                 </div>
-                <button type="button" className="primary-button" onClick={() => { resetForm(); setShowForm(true); }}>
+                {hasActiveFilters && (
+                  <button type="button" className="secondary-button" onClick={clearAllFilters}>
+                    Clear filters
+                  </button>
+                )}
+                <button type="button" className="primary-button" onClick={() => { resetForm(); setFormError(''); setShowForm(true); }}>
                   <Plus size={16} />
                   Add New
                 </button>
@@ -513,7 +578,63 @@ export default function App() {
                       <th>Email</th>
                       <th>Phone</th>
                       <th>Locations</th>
+                      <th>Status</th>
                       <th>Actions</th>
+                    </tr>
+                    <tr className="filter-row">
+                      <th>
+                        <input
+                          className="column-filter"
+                          value={filterCompany}
+                          onChange={(e) => setFilterCompany(e.target.value)}
+                          placeholder="Filter..."
+                        />
+                      </th>
+                      <th>
+                        <input
+                          className="column-filter"
+                          value={filterContact}
+                          onChange={(e) => setFilterContact(e.target.value)}
+                          placeholder="Filter..."
+                        />
+                      </th>
+                      <th>
+                        <input
+                          className="column-filter"
+                          value={filterEmail}
+                          onChange={(e) => setFilterEmail(e.target.value)}
+                          placeholder="Filter..."
+                        />
+                      </th>
+                      <th>
+                        <input
+                          className="column-filter"
+                          value={filterPhone}
+                          onChange={(e) => setFilterPhone(e.target.value)}
+                          placeholder="Filter..."
+                        />
+                      </th>
+                      <th>
+                        <input
+                          className="column-filter"
+                          value={filterLocation}
+                          onChange={(e) => setFilterLocation(e.target.value)}
+                          placeholder="Filter..."
+                        />
+                      </th>
+                      <th>
+                        <select
+                          className="column-filter"
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                          <option value="">All</option>
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -530,6 +651,18 @@ export default function App() {
                         <td>{lead.phone.join(', ') || '—'}</td>
                         <td>{lead.location.join(', ') || '—'}</td>
                         <td>
+                          <select
+                            className="status-select"
+                            value={lead.status}
+                            onChange={(e) => handleStatusChange(lead, e.target.value)}
+                            style={{ color: getStatusColors[lead.status] || '#f8fafc' }}
+                          >
+                            {STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
                           <div className="inline-actions">
                             <button type="button" className="table-button view" onClick={() => setViewingLead(lead)}>
                               <Eye size={14} />
@@ -539,6 +672,9 @@ export default function App() {
                             {lead.status !== 'Closed Lost' && (
                               <button type="button" className="table-button danger" onClick={() => handleReject(lead)}>Reject</button>
                             )}
+                            <button type="button" className="table-button delete" onClick={() => { if (confirm('Are you sure you want to delete this lead?')) handleDelete(lead.id); }}>
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -558,6 +694,8 @@ export default function App() {
                       <X size={18} />
                     </button>
                   </div>
+
+                  {formError && <div className="error-box">{formError}</div>}
 
                   <form onSubmit={handleSubmitLead}>
                     <div className="field-grid">
@@ -584,7 +722,7 @@ export default function App() {
                       <label>
                         <span>Status</span>
                         <select value={form.status} onChange={(e) => handleField('status', e.target.value)}>
-                          {['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'].map((status) => (
+                          {STATUS_OPTIONS.map((status) => (
                             <option key={status} value={status}>{status}</option>
                           ))}
                         </select>
