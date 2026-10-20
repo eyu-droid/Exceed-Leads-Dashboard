@@ -75,7 +75,8 @@ button {
 .login-form label,
 .date-picker-row label,
 .report-card label,
-.form-card label {
+.form-card label,
+.modal-card label {
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -91,6 +92,9 @@ button {
 .form-card input,
 .form-card textarea,
 .form-card select,
+.modal-card input,
+.modal-card textarea,
+.modal-card select,
 .search-box input {
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -106,6 +110,9 @@ button {
 .form-card input:focus,
 .form-card textarea:focus,
 .form-card select:focus,
+.modal-card input:focus,
+.modal-card textarea:focus,
+.modal-card select:focus,
 .search-box input:focus {
   border-color: rgba(129, 140, 248, 0.9);
   outline: none;
