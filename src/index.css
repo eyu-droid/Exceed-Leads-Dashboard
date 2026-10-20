@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Area,
   AreaChart,
@@ -116,6 +116,28 @@ export default function App() {
   const [reportTitle, setReportTitle] = useState('Exceed Internal Lead Report');
   const [reportNarrative, setReportNarrative] = useState('');
 
+  const fetchDashboard = async () => {
+    if (!token) return;
+
+    try {
+      const [leadsRes, summaryRes] = await Promise.all([
+        fetch('/api/leads', { headers: authHeaders(token) }),
+        fetch('/api/dashboard/summary', { headers: authHeaders(token) }),
+      ]);
+
+      if (!leadsRes.ok || !summaryRes.ok) {
+        throw new Error('Fetch failed');
+      }
+
+      const leadsData = await leadsRes.json();
+      const summaryData = await summaryRes.json();
+      setLeads(leadsData);
+      setSummary(summaryData);
+    } catch (error) {
+      console.error('Dashboard fetch error:', error);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       setUser(null);
@@ -136,26 +158,8 @@ export default function App() {
     };
 
     fetchInit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-
-  const fetchDashboard = async () => {
-    if (!token) return;
-
-    const [leadsRes, summaryRes] = await Promise.all([
-      fetch('/api/leads', { headers: authHeaders(token) }),
-      fetch('/api/dashboard/summary', { headers: authHeaders(token) }),
-    ]);
-
-    if (!leadsRes.ok || !summaryRes.ok) {
-      throw new Error('Fetch failed');
-    }
-
-    const leadsData = await leadsRes.json();
-    const summaryData = await summaryRes.json();
-
-    setLeads(leadsData);
-    setSummary(summaryData);
-  };
 
   const filteredLeads = useMemo(() => {
     return [...leads]
@@ -169,13 +173,14 @@ export default function App() {
 
         const q = search.toLowerCase();
         if (!q) return true;
+
         const haystack = `${lead.name} ${lead.company} ${lead.status} ${lead.contactPerson} ${lead.location.join(' ')}`.toLowerCase();
         return haystack.includes(q);
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [leads, search, dateStart, dateEnd]);
 
-  const handleLogin = async (event: React.FormEvent) => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoginError('');
 
@@ -216,7 +221,7 @@ export default function App() {
     setEditingId(null);
   };
 
-  const handleSubmitLead = async (event: React.FormEvent) => {
+  const handleSubmitLead = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
 
@@ -641,7 +646,7 @@ export default function App() {
   );
 }
 
-function StatCard({ title, value, icon, tone }: { title: string; value: string; icon: React.ReactNode; tone: 'blue' | 'green' | 'purple' | 'amber'; }) {
+function StatCard({ title, value, icon, tone }: { title: string; value: string; icon: ReactNode; tone: 'blue' | 'green' | 'purple' | 'amber'; }) {
   return (
     <div className={`stat-card ${tone}`}>
       <div className="stat-icon">{icon}</div>

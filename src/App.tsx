@@ -1,314 +1,548 @@
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const path = require('path');
-const fs = require('fs');
-const { PrismaClient } = require('@prisma/client');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { Document, HeadingLevel, Packer, Paragraph, TextRun } = require('docx');
+:root {
+  color: #e2e8f0;
+  background: #020817;
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-require('dotenv').config();
+* {
+  box-sizing: border-box;
+}
 
-const prisma = new PrismaClient();
-const app = express();
-const PORT = Number(process.env.PORT || 4000);
-const JWT_SECRET = process.env.JWT_SECRET || 'exceed-secret-dev';
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@exceed.local').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #020817 0%, #0f172a 100%);
+}
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '2mb' }));
+body {
+  min-height: 100vh;
+}
 
-const issueToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
-  expiresIn: '7d',
-});
+button, input, select, textarea {
+  font: inherit;
+}
 
-function authRequired(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+button {
+  cursor: pointer;
+}
 
-  if (!token) {
-    return res.status(401).json({ message: 'Authentication required.' });
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at top, rgba(99, 102, 241, 0.35), rgba(2, 6, 23, 0.95));
+}
+
+.login-card {
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 22px;
+  padding: 32px;
+  width: min(420px, 92vw);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.5);
+}
+
+.auth-brand {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  text-align: center;
+  background: linear-gradient(135deg, #c4b5fd, #7dd3fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.auth-subtitle {
+  margin: 0 0 20px;
+  text-align: center;
+  color: #cbd5e1;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-form label,
+.date-picker-row label,
+.report-card label,
+.form-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 0.92rem;
+}
+
+.login-form input,
+.login-form button,
+.date-picker-row input,
+.report-card input,
+.report-card textarea,
+.form-card input,
+.form-card textarea,
+.form-card select,
+.search-box input {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 11px 12px;
+}
+
+.login-form input:focus,
+.date-picker-row input:focus,
+.report-card input:focus,
+.report-card textarea:focus,
+.form-card input:focus,
+.form-card textarea:focus,
+.form-card select:focus,
+.search-box input:focus {
+  border-color: rgba(129, 140, 248, 0.9);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.primary-button,
+.secondary-button,
+.logout-button,
+.table-button,
+.nav-button {
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.primary-button,
+.secondary-button,
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+
+.secondary-button {
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.error-box {
+  background: rgba(239, 68, 68, 0.09);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fecaca;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: rgba(15, 23, 42, 0.88);
+  border-right: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 16px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+
+.brand-row strong,
+.brand-row small {
+  display: block;
+}
+
+.brand-row small {
+  color: #94a3b8;
+}
+
+.nav-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  text-align: left;
+  border: 1px solid transparent;
+}
+
+.nav-button:hover,
+.nav-button.active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(129, 140, 248, 0.4);
+}
+
+.user-card {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.avatar-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+}
+
+.user-card strong,
+.user-card small {
+  display: block;
+}
+
+.user-card small {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.logout-button {
+  width: 100%;
+  margin-top: 12px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.main-content {
+  flex: 1;
+  padding: 18px;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 20px;
+  padding: 20px;
+  min-height: calc(100vh - 36px);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.section-kicker {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7dd3fc;
+  font-size: 11px;
+}
+
+h1, h3 {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 2.5vw, 2.5rem);
+}
+
+.date-picker-row {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.stat-card.blue .stat-icon { background: rgba(59, 130, 246, 0.16); color: #93c5fd; }
+.stat-card.green .stat-icon { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+.stat-card.purple .stat-icon { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
+.stat-card.amber .stat-icon { background: rgba(249, 115, 22, 0.14); color: #fdba74; }
+
+.stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.stat-card small {
+  display: block;
+  color: #94a3b8;
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.7rem;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chart-card,
+.form-card,
+.table-card,
+.report-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mini-pill {
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+}
+
+.lead-layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 16px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+.form-actions,
+.report-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  width: 100%;
+  padding: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+th, td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  vertical-align: top;
+}
+
+th {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.person-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  font-weight: 700;
+}
+
+.person-cell strong,
+.person-cell small {
+  display: block;
+}
+
+.person-cell small {
+  color: #94a3b8;
+  font-size: 0.74rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-button {
+  padding: 8px 10px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #c7d2fe;
+}
+
+.table-button.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+}
+
+.report-summary {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.report-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.report-summary strong {
+  font-size: 1.6rem;
+}
+
+.report-summary span {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+  .chart-grid,
+  .lead-layout,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    flex-direction: column;
   }
 
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
-    return next();
-  } catch (error) {
-    return res.status(401).json({ message: 'Invalid or expired token.' });
-  }
-}
-
-async function seedAdmin() {
-  const existing = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
-
-  if (existing) return;
-
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-
-  await prisma.user.create({
-    data: {
-      name: 'System Admin',
-      email: ADMIN_EMAIL,
-      passwordHash,
-      role: 'admin',
-    },
-  });
-}
-
-function normalizeLead(lead) {
-  return {
-    id: lead.id,
-    name: lead.name,
-    company: lead.company,
-    email: Array.isArray(lead.email) ? lead.email : [],
-    location: Array.isArray(lead.location) ? lead.location : [],
-    phone: Array.isArray(lead.phone) ? lead.phone : [],
-    contactPerson: lead.contactPerson,
-    status: lead.status,
-    notes: lead.notes || '',
-    createdAt: lead.createdAt,
-    updatedAt: lead.updatedAt,
-  };
-}
-
-function buildStatusSummary(leads) {
-  const map = {};
-  leads.forEach((lead) => {
-    map[lead.status] = (map[lead.status] || 0) + 1;
-  });
-  return Object.entries(map).map(([name, value]) => ({ name, value }));
-}
-
-function buildLocationSummary(leads) {
-  const map = {};
-  leads.forEach((lead) => {
-    (lead.location || []).forEach((location) => {
-      map[location] = (map[location] || 0) + 1;
-    });
-  });
-  return Object.entries(map).map(([name, value]) => ({ name, value }));
-}
-
-function buildTrendSummary(leads) {
-  const map = {};
-
-  leads.forEach((lead) => {
-    const date = new Date(lead.createdAt).toISOString().slice(0, 10);
-    map[date] = (map[date] || 0) + 1;
-  });
-
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, total]) => ({ date, total }));
-}
-
-async function generateGeminiNarrative(leads, title) {
-  const key = process.env.GEMINI_API_KEY;
-
-  if (!key) return '';
-
-  try {
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const prompt = `You are an internal business reporting assistant. Create a professional internal department report based on the following leads summary. Keep it concise, strategic, and practical. Include business insights, pipeline status interpretation, and next steps.\n\nTitle: ${title}\n\nLeads JSON:\n${JSON.stringify(leads, null, 2)}`;
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error('Gemini generation failed:', error.message);
-    return '';
-  }
-}
-
-async function createDocFile({ title, reportText, leads }) {
-  const doc = new Document({
-    sections: [{
-      properties: {},
-      children: [
-        new Paragraph({
-          text: title || 'Exceed Lead Report',
-          heading: HeadingLevel.TITLE,
-        }),
-        new Paragraph({
-          children: [new TextRun({ text: 'Executive Summary', bold: true })],
-          heading: HeadingLevel.HEADING_1,
-        }),
-        new Paragraph({ text: reportText || 'Summary unavailable.' }),
-        new Paragraph({
-          children: [new TextRun({ text: 'Lead Details', bold: true })],
-          heading: HeadingLevel.HEADING_1,
-        }),
-        ...leads.flatMap((lead) => [
-          new Paragraph({
-            text: `${lead.name} — ${lead.company}`,
-            heading: HeadingLevel.HEADING_2,
-          }),
-          new Paragraph({ text: `Contact person: ${lead.contactPerson}` }),
-          new Paragraph({ text: `Email: ${(lead.email || []).join(', ') || 'No email provided'}` }),
-          new Paragraph({ text: `Phone: ${(lead.phone || []).join(', ') || 'No phone provided'}` }),
-          new Paragraph({ text: `Locations: ${(lead.location || []).join(', ') || 'No locations provided'}` }),
-          new Paragraph({ text: `Status: ${lead.status}` }),
-          new Paragraph({ text: `Notes: ${lead.notes || 'No notes provided'}` }),
-        ]),
-      ],
-    }],
-  });
-
-  return Packer.toBuffer(doc);
-}
-
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, message: 'Exceed API is running.' });
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required.' });
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
+  .field-grid,
+  .stats-grid,
+  .report-summary {
+    grid-template-columns: 1fr;
   }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-
-  if (!valid) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
-  }
-
-  return res.json({
-    token: issueToken(user),
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-  });
-});
-
-app.get('/api/auth/me', authRequired, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-  if (!user) return res.status(404).json({ message: 'User not found.' });
-
-  return res.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    },
-  });
-});
-
-app.get('/api/leads', authRequired, async (req, res) => {
-  const leads = await prisma.lead.findMany({ orderBy: { updatedAt: 'desc' } });
-  return res.json(leads.map(normalizeLead));
-});
-
-app.post('/api/leads', authRequired, async (req, res) => {
-  const body = req.body || {};
-  const lead = await prisma.lead.create({
-    data: {
-      name: String(body.name || '').trim(),
-      company: String(body.company || '').trim(),
-      email: Array.isArray(body.email) ? body.email : String(body.email || '').split(',').map((i) => i.trim()).filter(Boolean),
-      location: Array.isArray(body.location) ? body.location : String(body.location || '').split(',').map((i) => i.trim()).filter(Boolean),
-      phone: Array.isArray(body.phone) ? body.phone : String(body.phone || '').split(',').map((i) => i.trim()).filter(Boolean),
-      contactPerson: String(body.contactPerson || body.name || '').trim(),
-      status: String(body.status || 'New').trim(),
-      notes: String(body.notes || '').trim(),
-    },
-  });
-
-  return res.status(201).json(normalizeLead(lead));
-});
-
-app.put('/api/leads/:id', authRequired, async (req, res) => {
-  const existing = await prisma.lead.findUnique({ where: { id: req.params.id } });
-  if (!existing) return res.status(404).json({ message: 'Lead not found.' });
-
-  const body = req.body || {};
-  const updated = await prisma.lead.update({
-    where: { id: req.params.id },
-    data: {
-      name: String(body.name ?? existing.name).trim(),
-      company: String(body.company ?? existing.company).trim(),
-      email: Array.isArray(body.email) ? body.email : String(body.email ?? existing.email.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
-      location: Array.isArray(body.location) ? body.location : String(body.location ?? existing.location.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
-      phone: Array.isArray(body.phone) ? body.phone : String(body.phone ?? existing.phone.join(', ')).split(',').map((i) => i.trim()).filter(Boolean),
-      contactPerson: String(body.contactPerson ?? existing.contactPerson).trim(),
-      status: String(body.status ?? existing.status).trim(),
-      notes: String(body.notes ?? existing.notes ?? '').trim(),
-    },
-  });
-
-  return res.json(normalizeLead(updated));
-});
-
-app.delete('/api/leads/:id', authRequired, async (req, res) => {
-  await prisma.lead.delete({ where: { id: req.params.id } }).catch(() => null);
-  return res.json({ ok: true });
-});
-
-app.get('/api/dashboard/summary', authRequired, async (req, res) => {
-  const leads = (await prisma.lead.findMany({ orderBy: { createdAt: 'asc' } })).map(normalizeLead);
-
-  const total = leads.length;
-  const statusBreakdown = buildStatusSummary(leads);
-  const locationBreakdown = buildLocationSummary(leads);
-  const trend = buildTrendSummary(leads);
-  const active = leads.filter((lead) => ['Interested', 'Follow Up', 'Qualified', 'Closed Won', 'Proposal Sent', 'Negotiation'].includes(lead.status)).length;
-
-  return res.json({
-    total,
-    active,
-    won: leads.filter((lead) => /won/i.test(lead.status)).length,
-    statusBreakdown,
-    locationBreakdown,
-    trend,
-  });
-});
-
-app.post('/api/reports/generate-docx', authRequired, async (req, res) => {
-  const { title = 'Exceed Lead Report', leads = [], narrative = '' } = req.body || {};
-  const data = Array.isArray(leads) && leads.length ? leads : await prisma.lead.findMany({ orderBy: { updatedAt: 'desc' } });
-  const normalizedLeads = data.map(normalizeLead);
-  const generated = narrative || (await generateGeminiNarrative(normalizedLeads, title));
-  const buffer = await createDocFile({ title, reportText: generated || 'The team is tracking a stable pipeline with active opportunities at varying stages of development.', leads: normalizedLeads });
-
-  res.setHeader('Content-Disposition', `attachment; filename="${(title || 'exceed-report').replace(/\s+/g, '-').toLowerCase()}.docx"`);
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  return res.send(buffer);
-});
-
-const distFolder = path.join(__dirname, 'dist');
-const distIndex = path.join(distFolder, 'index.html');
-
-if (fs.existsSync(distIndex)) {
-  app.use(express.static(distFolder));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) return next();
-    res.sendFile(distIndex);
-  });
 }
-
-async function start() {
-  await seedAdmin();
-  app.listen(PORT, () => {
-    console.log(`Exceed backend running on http://localhost:${PORT}`);
-  });
-}
-
-start().catch((error) => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
