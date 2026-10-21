@@ -825,12 +825,30 @@ export default function App() {
           </div>
         )}
 
+        {menu === 'notes' && (
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="section-kicker">Notes</p>
+              </div>
+
+              <div className="header-actions">
+                <div className="search-box">
+                  <Search size={16} />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Notes" />
+                </div>
+                <button type="button" className="primary-button" onClick={() => { resetForm(); setFormError(''); setNoteForm(true); }}>
+                  <Plus size={16} />
+                  Add New
+                </button>
+              </div>
+            </div>
+
         {menu === 'reports' && (
           <div className="panel">
             <div className="panel-header">
               <div>
-                <p className="section-kicker">Intelligence</p>
-                <h1>Reports</h1>
+                <p className="section-kicker">Reports</p>
               </div>
             </div>
 
@@ -841,7 +859,7 @@ export default function App() {
               </label>
 
               <label className="full-span">
-                <span>Business narrative</span>
+                <span>Report narrative</span>
                 <textarea rows={7} value={reportNarrative} onChange={(e) => setReportNarrative(e.target.value)} placeholder="Add your team analysis or let Gemini generate it based on lead statuses." />
               </label>
 
