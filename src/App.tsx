@@ -8,6 +8,7 @@ import {
   LogOut,
   Plus,
   Search,
+  StickyNote,
   Trash2,
   UserRoundCheck,
   Users,
@@ -29,7 +30,7 @@ import {
 } from 'recharts';
 import { getStatusColors } from './lib/utils';
 
-type MenuName = 'dashboard' | 'leads' | 'reports';
+type MenuName = 'dashboard' | 'leads' | 'notes' | 'reports';
 
 type Lead = {
   id: string;
@@ -50,6 +51,14 @@ type User = {
   email: string;
   name: string;
   role: string;
+};
+
+type Note = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type DashboardSummary = {
@@ -76,6 +85,7 @@ const STATUS_OPTIONS = ['New', 'Interested', 'Follow Up', 'Qualified', 'Proposal
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'leads', label: 'Leads', icon: Users },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
   { id: 'reports', label: 'Reports', icon: BriefcaseBusiness },
 ] as const;
 
@@ -128,6 +138,11 @@ export default function App() {
   const [dateEnd, setDateEnd] = useState('');
   const [reportTitle, setReportTitle] = useState('Exceed Internal Lead Report');
   const [reportNarrative, setReportNarrative] = useState('');
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [viewingNote, setViewingNote] = useState<Note | null>(null);
 
   const fetchDashboard = async () => {
     if (!token) return;

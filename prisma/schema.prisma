@@ -37,3 +37,11 @@ model ReportLog {
   summary   String?
   createdAt DateTime @default(now())
 }
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

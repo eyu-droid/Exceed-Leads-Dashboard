@@ -310,6 +310,36 @@ app.post('/api/reports/generate-docx', authRequired, async (req, res) => {
   return res.send(buffer);
 });
 
+// ── Notes CRUD ──
+
+app.get('/api/notes', authRequired, async (req, res) => {
+  const notes = await prisma.note.findMany({ orderBy: { updatedAt: 'desc' } });
+  return res.json(notes);
+});
+
+app.post('/api/notes', authRequired, async (req, res) => {
+  const { title, content } = req.body;
+  if (!title || !content) {
+    return res.status(400).json({ message: 'Title and content are required.' });
+  }
+  const note = await prisma.note.create({ data: { title, content } });
+  return res.status(201).json(note);
+});
+
+app.put('/api/notes/:id', authRequired, async (req, res) => {
+  const { title, content } = req.body;
+  const note = await prisma.note.update({
+    where: { id: req.params.id },
+    data: { title, content },
+  });
+  return res.json(note);
+});
+
+app.delete('/api/notes/:id', authRequired, async (req, res) => {
+  await prisma.note.delete({ where: { id: req.params.id } });
+  return res.json({ success: true });
+});
+
 const distFolder = path.join(__dirname, 'dist');
 const distIndex = path.join(distFolder, 'index.html');
 
