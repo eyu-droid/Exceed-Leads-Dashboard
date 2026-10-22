@@ -843,6 +843,8 @@ export default function App() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
 
         {menu === 'reports' && (
           <div className="panel">
