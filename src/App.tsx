@@ -844,7 +844,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        </div>
+
 
         {menu === 'reports' && (
           <div className="panel">
