@@ -362,6 +362,49 @@ export default function App() {
 
   const hasActiveFilters = filterStatus || filterCompany || filterContact || filterEmail || filterPhone || filterLocation;
 
+  // ── Notes handlers ──
+
+  const fetchNotes = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/notes', { headers: authHeaders(token) });
+      if (res.ok) setNotes(await res.json());
+    } catch (err) {
+      console.error('Failed to fetch notes:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (token && menu === 'notes') fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, menu]);
+
+  const handleSubmitNote = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+
+    try {
+      const response = await fetch(editingNoteId ? `/api/notes/${editingNoteId}` : '/api/notes', {
+        method: editingNoteId ? 'PUT' : 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify(noteForm),
+      });
+      if (!response.ok) throw new Error('Save failed');
+      setShowNoteForm(false);
+      setEditingNoteId(null);
+      setNoteForm({ title: '', content: '' });
+      await fetchNotes();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!token) return;
+    await fetch(`/api/notes/${noteId}`, { method: 'DELETE', headers: authHeaders(token) });
+    await fetchNotes();
+  };
+
   const handleDownloadReport = async () => {
     if (!token) return;
     const response = await fetch('/api/reports/generate-docx', {
@@ -829,20 +872,109 @@ export default function App() {
           <div className="panel">
             <div className="panel-header">
               <div>
-                <p className="section-kicker">Notes</p>
+                <p className="section-kicker">Personal</p>
+                <h1>Notes</h1>
               </div>
 
               <div className="header-actions">
                 <div className="search-box">
                   <Search size={16} />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Notes" />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search notes..." />
                 </div>
-                <button type="button" className="primary-button" onClick={() => { resetForm(); setFormError(''); setNoteForm(true); }}>
+                <button type="button" className="primary-button" onClick={() => { setNoteForm({ title: '', content: '' }); setEditingNoteId(null); setShowNoteForm(true); }}>
                   <Plus size={16} />
-                  Add New
+                  Add Note
                 </button>
               </div>
             </div>
+
+            {notes.length === 0 && (
+              <div className="empty-state">
+                <StickyNote size={48} />
+                <p>No notes yet. Click "Add Note" to create your first one.</p>
+              </div>
+            )}
+
+            <div className="notes-grid">
+              {notes
+                .filter((n) => {
+                  if (!search) return true;
+                  const q = search.toLowerCase();
+                  return n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q);
+                })
+                .map((note) => (
+                <div key={note.id} className="note-card" onClick={() => setViewingNote(note)}>
+                  <div className="note-card-header">
+                    <h4>{note.title}</h4>
+                    <div className="inline-actions">
+                      <button type="button" className="table-button" onClick={(e) => { e.stopPropagation(); setEditingNoteId(note.id); setNoteForm({ title: note.title, content: note.content }); setShowNoteForm(true); }}>
+                        Edit
+                      </button>
+                      <button type="button" className="table-button delete" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this note?')) handleDeleteNote(note.id); }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="note-preview">{note.content.length > 120 ? note.content.slice(0, 120) + '...' : note.content}</p>
+                  <small className="note-date">{formatDate(note.updatedAt)}</small>
+                </div>
+              ))}
+            </div>
+
+            {/* Add / Edit Note Modal */}
+            {showNoteForm && (
+              <div className="modal-overlay" onClick={() => setShowNoteForm(false)}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3>{editingNoteId ? 'Edit note' : 'New note'}</h3>
+                    <button type="button" className="modal-close" onClick={() => setShowNoteForm(false)}>
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSubmitNote}>
+                    <div className="field-grid">
+                      <label className="full-span">
+                        <span>Title</span>
+                        <input value={noteForm.title} onChange={(e) => setNoteForm((c) => ({ ...c, title: e.target.value }))} required />
+                      </label>
+                      <label className="full-span">
+                        <span>Content</span>
+                        <textarea rows={8} value={noteForm.content} onChange={(e) => setNoteForm((c) => ({ ...c, content: e.target.value }))} required />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button type="submit" className="primary-button">
+                        <Plus size={16} />
+                        {editingNoteId ? 'Update note' : 'Save note'}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => setShowNoteForm(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* View Note Modal */}
+            {viewingNote && (
+              <div className="modal-overlay" onClick={() => setViewingNote(null)}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3>{viewingNote.title}</h3>
+                    <button type="button" className="modal-close" onClick={() => setViewingNote(null)}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <p className="note-content-view">{viewingNote.content}</p>
+                  <div className="note-meta">
+                    <small>Created: {formatDate(viewingNote.createdAt)}</small>
+                    <small>Updated: {formatDate(viewingNote.updatedAt)}</small>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -850,7 +982,8 @@ export default function App() {
           <div className="panel">
             <div className="panel-header">
               <div>
-                <p className="section-kicker">Reports</p>
+                <p className="section-kicker">Intelligence</p>
+                <h1>Reports</h1>
               </div>
             </div>
 
